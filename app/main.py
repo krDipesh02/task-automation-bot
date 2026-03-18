@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
+from fastapi.concurrency import asynccontextmanager
 
 # Load env variables
 load_dotenv()
@@ -8,8 +9,22 @@ load_dotenv()
 from app.adapters.telegram.parser import parse_telegram_input_data
 from app.adapters.telegram.sender import send_message
 from app.core.orchestrator import run_orchestrator
+from app.agents.agent_registry import init_agents
 
 app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("🔥 Lifespan START")
+
+    init_agents()
+
+    yield
+
+    print("🔥 Lifespan END")
+
+app = FastAPI(lifespan=lifespan)
+
 
 @app.get("/")
 async def root():

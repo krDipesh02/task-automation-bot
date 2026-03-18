@@ -1,10 +1,4 @@
-from app.executor.n8n_client import call_n8n_workflow
+from app.agents.agent_registry import invoke_agent
 
 def handle_n8n_task(user_input: str) -> str:
-    payload = {
-        "text": user_input
-    }
-
-    result = call_n8n_workflow(payload)
-
-    return f"✅ n8n Agent executed:\n{result}"
+    return invoke_agent("n8n_agent", user_input)
