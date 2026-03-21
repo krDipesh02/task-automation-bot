@@ -4,9 +4,11 @@ from typing import Optional
 
 import requests
 from sseclient import SSEClient
+from app.utils.logger import get_logger
 
 N8N_MCP_URL = os.getenv("N8N_MCP_URL")
 N8N_AUTH_TOKEN = os.getenv("N8N_AUTH_TOKEN")
+logger = get_logger(__name__)
 
 
 def _build_headers() -> dict:
@@ -26,6 +28,7 @@ def _send_mcp_request(method: str, params: Optional[dict] = None) -> dict:
     }
 
     try:
+        logger.info("Sending MCP request: %s", method)
         response = requests.post(
             N8N_MCP_URL,
             data=json.dumps(payload),
@@ -43,17 +46,21 @@ def _send_mcp_request(method: str, params: Optional[dict] = None) -> dict:
             parsed = json.loads(event.data)
 
             if "error" in parsed:
-                print("❌ MCP ERROR:", parsed["error"])
+                logger.error("MCP error for %s: %s", method, parsed["error"])
                 return {"error": parsed["error"]}
 
             if "result" in parsed:
+                logger.info("Received MCP result for %s", method)
                 return parsed["result"]
 
+            logger.info("Received raw MCP payload for %s", method)
             return parsed
 
+        logger.warning("No response from MCP for %s", method)
         return {"error": "No response from MCP"}
 
     except Exception as e:
+        logger.exception("MCP request failed for %s: %s", method, e)
         return {"error": str(e)}
 
 
@@ -70,6 +77,7 @@ def call_n8n_workflow(tool_name: str, params: Optional[dict] = None) -> dict:
     Call an n8n MCP tool using JSON-RPC.
     """
 
+    logger.info("Calling n8n workflow tool: %s", tool_name)
     return _send_mcp_request(
         "tools/call",
         {

@@ -1,12 +1,16 @@
 import json
 from app.services.llm_service import llm
 from app.prompts.agent_prompts import ROUTER_SYSTEM_PROMPT, build_router_user_prompt
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def route_to_agent(user_input: str) -> str:
     """Decide which agent should handle the request."""
 
     try:
+        logger.info("Routing user input")
         response = llm.invoke([
             {"role": "system", "content": ROUTER_SYSTEM_PROMPT},
             {"role": "user", "content": build_router_user_prompt(user_input)},
@@ -18,9 +22,10 @@ def route_to_agent(user_input: str) -> str:
             content = content.replace("```json", "").replace("```", "").strip()
 
         parsed = json.loads(content)
-
-        return parsed.get("agent", "default_agent")
+        agent_name = parsed.get("agent", "default_agent")
+        logger.info("Routing completed: %s", agent_name)
+        return agent_name
 
     except Exception as e:
-        print("Routing error:", e)
+        logger.exception("Routing error: %s", e)
         return "default_agent"
