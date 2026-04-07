@@ -37,7 +37,10 @@ def bootstrap_telegram_user(context: TelegramRequestContext) -> Dict[str, Any]:
         timeout=15,
     )
     response.raise_for_status()
-    payload = response.json()
+    try:
+        payload = response.json()
+    except requests.exceptions.JSONDecodeError:
+        payload = {}
     logger.info("Spendwise bootstrap completed for telegram_user_id=%s", context.telegram_user_id)
     return payload
 
@@ -61,7 +64,10 @@ def issue_automation_access_token(context: TelegramRequestContext) -> Dict[str, 
         timeout=15,
     )
     response.raise_for_status()
-    payload = response.json()
+    try:
+        payload = response.json()
+    except requests.exceptions.JSONDecodeError:
+        payload = {}
     _cache_automation_access_token(context.telegram_user_id, payload)
     logger.info(
         "Spendwise automation JWT issued for telegram_user_id=%s expires_at=%s",
@@ -144,7 +150,10 @@ def fetch_conversation_memory(context: TelegramRequestContext) -> List[Conversat
         timeout=15,
     )
     response.raise_for_status()
-    payload = response.json()
+    try:
+        payload = response.json()
+    except requests.exceptions.JSONDecodeError:
+        payload = {}
     return [
         ConversationTurn(role=item["role"], content=item["content"])
         for item in payload.get("messages", [])
@@ -172,7 +181,10 @@ def store_conversation_memory(context: TelegramRequestContext, messages: List[Co
         timeout=15,
     )
     response.raise_for_status()
-    payload = response.json()
+    try:
+        payload = response.json()
+    except requests.exceptions.JSONDecodeError:
+        payload = {}
     logger.info("Stored conversation memory for telegram_user_id=%s", context.telegram_user_id)
     return [
         ConversationTurn(role=item["role"], content=item["content"])
