@@ -1,17 +1,20 @@
-from app.services.llm_service import generate_response
+from venv import logger
 
-def handle_default_task(user_input: str) -> str:
-    prompt = f"""
-You are a helpful conversational assistant.
+from langgraph.prebuilt import create_react_agent
+from app.prompts.agent_prompts import DEFAULT_AGENT_PROMPT
+from app.services.llm_service import llm
 
-You handle:
-- greetings
-- general questions
-- explanations
+async def get_default_agent():
+    """
+    """
 
-Respond in a clean, human-readable format.
-Do NOT return JSON.
-Use paragraphs and bullet points if needed.
-"""
+    agent = create_react_agent(
+        name="default_agent",
+        model = llm,
+        tools = [],
+        prompt = DEFAULT_AGENT_PROMPT
+    )
 
-    return generate_response(prompt, user_prompt=user_input)
+    logger.info("Default agent initialized")
+    return agent
+
