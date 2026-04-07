@@ -1,91 +1,81 @@
-from typing import Any, Dict, Tuple, Type
+from __future__ import annotations
 
-from langchain.tools import StructuredTool
-from pydantic import BaseModel, Field, create_model
+import os
+from typing import Sequence
 
-from app.executor.n8n_client import call_n8n_workflow, list_n8n_tools
+from dotenv import load_dotenv
+from langchain_core.tools import BaseTool
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.interceptors import MCPToolCallRequest, MCPToolCallResult
+
+from app.core.models import get_current_conversation_history, get_current_request_context
+from app.services.spendwise_service import get_automation_access_token
+
 from app.utils.logger import get_logger
+
+load_dotenv()
 
 logger = get_logger(__name__)
 
-
-def _map_json_schema_type(schema: Dict[str, Any]) -> type:
-    schema_type = schema.get("type")
-
-    if schema_type == "string":
-        return str
-    if schema_type == "integer":
-        return int
-    if schema_type == "number":
-        return float
-    if schema_type == "boolean":
-        return bool
-    if schema_type == "array":
-        return list
-    if schema_type == "object":
-        return dict
-
-    return Any
+_n8n_client: MultiServerMCPClient | None = None
+_n8n_tools: list[BaseTool] = []
 
 
-def _build_args_schema(tool_name: str, input_schema: Dict[str, Any]) -> Type[BaseModel]:
-    properties = input_schema.get("properties", {})
-    required = set(input_schema.get("required", []))
-    fields: Dict[str, Tuple[type, Any]] = {}
-
-    for field_name, field_schema in properties.items():
-        field_type = _map_json_schema_type(field_schema)
-        description = field_schema.get("description", "")
-
-        if field_name in required:
-            fields[field_name] = (field_type, Field(..., description=description))
-        else:
-            fields[field_name] = (field_type, Field(default=None, description=description))
-
-    model_name = "".join(part.capitalize() for part in tool_name.split("_")) + "Args"
-    return create_model(model_name, **fields)
+def _require_n8n_config() -> tuple[str, str]:
+    n8n_mcp_url = os.getenv("N8N_MCP_URL")
+    n8n_auth_token = os.getenv("N8N_AUTH_TOKEN")
+    if not n8n_mcp_url:
+        raise RuntimeError("N8N_MCP_URL is not configured")
+    if not n8n_auth_token:
+        raise RuntimeError("N8N_AUTH_TOKEN is not configured")
+    return n8n_mcp_url, n8n_auth_token
 
 
-def get_n8n_tools():
-    """
-    Dynamically fetch tools from MCP and convert to LangChain tools
-    """
+def _build_chat_input() -> str:
+    context = get_current_request_context()
+    if context is None:
+        return ""
 
-    # 🔥 Step 1: Fetch tools from MCP
-    response = list_n8n_tools()
-    tools_data = response.get("tools", [])
+    prior_user_messages = [
+        turn.content.strip()
+        for turn in get_current_conversation_history()
+        if turn.role == "user" and turn.content.strip()
+    ]
+    prior_user_messages.append(context.user_message.strip())
+    unique_messages: list[str] = []
+    for message in prior_user_messages:
+        if message and (not unique_messages or unique_messages[-1] != message):
+            unique_messages.append(message)
+    return "\n".join(unique_messages[-4:]).strip()
 
-    if not tools_data and response.get("result", {}).get("tools"):
-        tools_data = response["result"]["tools"]
 
-    tools = []
+async def _inject_trusted_context(
+    request: MCPToolCallRequest,
+    handler,
+) -> MCPToolCallResult:
+    context = get_current_request_context()
+    if context is None or request.name != "execute_workflow":
+        return await handler(request)
 
-    for tool in tools_data:
-        name = tool["name"]
-        description = tool.get("description", "")
-        input_schema = tool.get("inputSchema", {})
-        args_schema = _build_args_schema(name, input_schema)
+    # Safely extract inputs
+    args = dict(request.args or {})
+    inputs = args.get("inputs") or {}
 
-        def make_tool_fn(tool_name):
-            def tool_fn(**kwargs):
-                payload = {key: value for key, value in kwargs.items() if value is not None}
-                logger.info("Executing MCP tool wrapper: %s", tool_name)
-                return call_n8n_workflow(tool_name, payload)
-            return tool_fn
+    if not isinstance(inputs, dict):
+        raise ValueError("execute_workflow inputs must be an object")
 
-        tools.append(
-            StructuredTool.from_function(
-                name=name,
-                func=make_tool_fn(name),
-                description=description,
-                args_schema=args_schema,
-                infer_schema=False,
-            )
-        )
+    # Prevent spoofing of telegram_user_id
+    provided_user_id = inputs.get("telegram_user_id")
+    if provided_user_id is not None and str(provided_user_id) != context.telegram_user_id:
+        raise ValueError("inputs.telegram_user_id mismatch with trusted context")
 
-    if "error" in response:
-        logger.error("Failed to fetch MCP tools: %s", response["error"])
-    else:
-        logger.info("Fetched and wrapped MCP tools: %s", [t.name for t in tools])
+    # Inject trusted value
+    inputs["telegram_user_id"] = context.telegram_user_id
+    args["inputs"] = inputs
 
-    return tools
+    return await handler(request.override(args=args))
+
+async def close_n8n_tools() -> None:
+    global _n8n_client, _n8n_tools
+    _n8n_client = None
+    _n8n_tools = []
