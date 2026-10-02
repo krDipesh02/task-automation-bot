@@ -9,7 +9,6 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.interceptors import MCPToolCallRequest, MCPToolCallResult
 
 from app.core.models import get_current_conversation_history, get_current_request_context
-from app.services.spendwise_service import get_automation_access_token
 
 from app.utils.logger import get_logger
 

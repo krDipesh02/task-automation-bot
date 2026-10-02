@@ -5,7 +5,6 @@ from typing import Optional
 import requests
 from sseclient import SSEClient
 from app.core.models import TelegramRequestContext, get_current_conversation_history
-from app.services.spendwise_service import get_automation_access_token
 from app.utils.logger import get_logger
 
 N8N_MCP_URL = os.getenv("N8N_MCP_URL")
@@ -31,11 +30,6 @@ def _merge_request_context(params: Optional[dict], context: Optional[TelegramReq
     if provided is not None and str(provided) != telegram_user_id:
         raise ValueError("telegram_user_id mismatch with trusted Telegram request context")
     payload["telegram_user_id"] = telegram_user_id
-    provided_access_token = payload.get("access_token")
-    trusted_access_token = get_automation_access_token(context)
-    if provided_access_token is not None and str(provided_access_token) != trusted_access_token:
-        raise ValueError("access_token mismatch with trusted Telegram request context")
-    payload["access_token"] = trusted_access_token
     _inject_default_workflow_inputs(payload, context)
     return payload
 
@@ -52,13 +46,7 @@ def _inject_default_workflow_inputs(payload: dict, context: TelegramRequestConte
     if provided is not None and str(provided) != context.telegram_user_id:
         raise ValueError("inputs.telegram_user_id mismatch with trusted Telegram request context")
 
-    trusted_access_token = get_automation_access_token(context)
-    provided_access_token = inputs.get("access_token")
-    if provided_access_token is not None and str(provided_access_token) != trusted_access_token:
-        raise ValueError("inputs.access_token mismatch with trusted Telegram request context")
-
     inputs["telegram_user_id"] = context.telegram_user_id
-    inputs["access_token"] = trusted_access_token
     inputs.setdefault("type", "chat")
 
     if not inputs.get("chatInput"):
