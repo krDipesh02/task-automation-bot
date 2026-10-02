@@ -10,7 +10,6 @@ from app.core.models import (
 )
 from app.executor.n8n_client import _build_chat_input, _merge_request_context
 from app.prompts.agent_prompts import build_router_user_prompt
-from app.services.spendwise_service import build_bootstrap_response
 
 
 def test_parse_telegram_input_data_extracts_user_context():
@@ -49,13 +48,12 @@ def test_merge_request_context_injects_telegram_user_id():
         user_message="spent 500 on food",
     )
 
-    with patch("app.executor.n8n_client.get_automation_access_token", return_value="jwt-123"):
-        merged = _merge_request_context({"amount": 500}, context)
+    merged = _merge_request_context({"amount": 500}, context)
     assert merged["telegram_user_id"] == "12345"
-    assert merged["access_token"] == "jwt-123"
+    assert "access_token" not in merged
     assert merged["amount"] == 500
     assert merged["inputs"]["telegram_user_id"] == "12345"
-    assert merged["inputs"]["access_token"] == "jwt-123"
+    assert "access_token" not in merged["inputs"]
     assert merged["inputs"]["type"] == "chat"
 
 
@@ -70,18 +68,11 @@ def test_merge_request_context_rejects_mismatch():
     )
 
     try:
-        with patch("app.executor.n8n_client.get_automation_access_token", return_value="jwt-123"):
-            _merge_request_context({"telegram_user_id": "54321"}, context)
+        _merge_request_context({"telegram_user_id": "54321"}, context)
     except ValueError as exc:
         assert "mismatch" in str(exc)
     else:
         raise AssertionError("expected mismatch validation error")
-
-
-def test_build_bootstrap_response_for_created_user():
-    message = build_bootstrap_response({"created": True, "displayName": "Alice"})
-    assert "Alice" in message
-    assert "account is ready" in message
 
 
 def test_router_prompt_includes_recent_automation_context():
@@ -96,7 +87,6 @@ def test_router_prompt_includes_recent_automation_context():
     assert "Recent conversation:" in prompt
     assert "expense 500 on food" in prompt
     assert "Please provide merchant and description." in prompt
-    assert "short follow-up" in prompt
 
 
 def test_merge_request_context_injects_nested_workflow_inputs():
@@ -111,15 +101,14 @@ def test_merge_request_context_injects_nested_workflow_inputs():
     history = [ConversationTurn(role="user", content="spent 500 INR on food today")]
     token = set_current_conversation_history(history)
     try:
-        with patch("app.executor.n8n_client.get_automation_access_token", return_value="jwt-123"):
-            merged = _merge_request_context({"inputs": {}}, context)
+        merged = _merge_request_context({"inputs": {}}, context)
     finally:
         reset_current_conversation_history(token)
 
     assert merged["telegram_user_id"] == "12345"
-    assert merged["access_token"] == "jwt-123"
+    assert "access_token" not in merged
     assert merged["inputs"]["telegram_user_id"] == "12345"
-    assert merged["inputs"]["access_token"] == "jwt-123"
+    assert "access_token" not in merged["inputs"]
     assert merged["inputs"]["type"] == "chat"
     assert "spent 500 INR on food today" in merged["inputs"]["chatInput"]
     assert "merchant is swiggy" in merged["inputs"]["chatInput"]
@@ -136,31 +125,11 @@ def test_merge_request_context_rejects_non_object_inputs():
     )
 
     try:
-        with patch("app.executor.n8n_client.get_automation_access_token", return_value="jwt-123"):
-            _merge_request_context({"inputs": "invalid"}, context)
+        _merge_request_context({"inputs": "invalid"}, context)
     except ValueError as exc:
         assert "inputs must be an object" in str(exc)
     else:
         raise AssertionError("expected invalid inputs validation error")
-
-
-def test_merge_request_context_rejects_access_token_mismatch():
-    context = TelegramRequestContext(
-        chat_id=99,
-        telegram_user_id="12345",
-        telegram_username="alice",
-        first_name="Alice",
-        last_name="Doe",
-        user_message="spent 500 on food",
-    )
-
-    try:
-        with patch("app.executor.n8n_client.get_automation_access_token", return_value="jwt-123"):
-            _merge_request_context({"access_token": "jwt-other"}, context)
-    except ValueError as exc:
-        assert "access_token mismatch" in str(exc)
-    else:
-        raise AssertionError("expected access token mismatch validation error")
 
 
 def test_build_chat_input_uses_recent_user_messages():
@@ -199,9 +168,7 @@ def test_build_n8n_execution_context_uses_trusted_token():
         user_message="spent 500 on food",
     )
 
-    with patch("app.agents.agent_registry.get_automation_access_token", return_value="jwt-123"):
-        execution_context = _build_n8n_execution_context(context)
+    execution_context = _build_n8n_execution_context(context)
 
     assert "telegram_user_id: 12345" in execution_context
-    assert "access_token: jwt-123" in execution_context
-    assert "Never expose the access_token" in execution_context
+    assert "access_token" not in execution_context

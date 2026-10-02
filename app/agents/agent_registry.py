@@ -13,7 +13,6 @@ from app.core.models import (
     set_current_conversation_history,
     set_current_request_context,
 )
-from app.services.spendwise_service import get_automation_access_token
 from app.core.message_utils import extract_agent_response
 from app.prompts.agent_prompts import DEFAULT_AGENT_PROMPT, N8N_AGENT_PROMPT, SPENDWISE_AGENT_PROMPT
 from app.utils.logger import get_logger
@@ -41,14 +40,13 @@ def get_agents():
 
 
 def _build_n8n_execution_context(context: TelegramRequestContext) -> str:
-    # access_token = get_automation_access_token(context)
     return f"""
 Trusted execution context for this Telegram request:
 - telegram_user_id: {context.telegram_user_id}
 
 Use these exact trusted values when a native n8n MCP tool requires them.
 Never ask the user for either value.
-Never expose the access_token in user-facing output.
+Never ask the user for an identity value.
 """.strip()
 
 
