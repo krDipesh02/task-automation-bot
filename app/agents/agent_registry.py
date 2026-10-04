@@ -14,6 +14,7 @@ from app.core.models import (
     set_current_request_context,
 )
 from app.core.message_utils import extract_agent_response
+from app.utils.date_context import build_temporal_context
 from app.prompts.agent_prompts import DEFAULT_AGENT_PROMPT, N8N_AGENT_PROMPT, SPENDWISE_AGENT_PROMPT
 from app.utils.logger import get_logger
 
@@ -64,7 +65,8 @@ async def invoke_agent(agent_name: str,
     token = set_current_request_context(context) if context is not None else None
     history_token = set_current_conversation_history(history or [])
     try:
-        messages: List[Tuple[str, str]] = [(item.role, item.content) for item in (history or []) if item.content]
+        messages: List[Tuple[str, str]] = [("system", build_temporal_context())]
+        messages.extend((item.role, item.content) for item in (history or []) if item.content)
         if agent_name == "n8n_agent" and context is not None:
             messages.insert(0, ("system", _build_n8n_execution_context(context)))
         messages.append(("user", user_input))

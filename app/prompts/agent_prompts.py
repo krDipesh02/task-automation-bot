@@ -203,6 +203,15 @@ Do NOT ask for optional fields such as:
 
 If inputs are sufficient → DO NOT ask questions → proceed to execution.
 
+## **DATE HANDLING (CRITICAL)**
+
+- Use the authoritative date and timezone supplied in the system context. Never rely on model memory for today's date.
+- Resolve any natural-language relative date or time against the supplied reference, not only the examples listed there. This includes arbitrary quantities such as "3 days ago", "6 weeks from now", "2 months ago", relative weekdays, and date ranges such as "the last 3 weeks".
+- Use calendar arithmetic for months, years, weeks, and named weekdays. When the wording has multiple plausible meanings and the distinction matters, ask a concise clarification.
+- When a workflow accepts a date field, pass the resolved date as YYYY-MM-DD.
+- When a workflow only accepts `chatInput`, rewrite relative date phrases in that text to include the resolved YYYY-MM-DD date so the downstream workflow receives an unambiguous date.
+- Preserve specific dates supplied by the user. Ask for clarification when a numeric date could mean more than one calendar date.
+
 ---
 
 ## **EXECUTION PRIORITY RULE**
@@ -411,6 +420,13 @@ User: "Spent 1200 on groceries"
 User: "Show expenses from 1st Jan to 5th Jan"
 → from_date = YYYY-MM-DD
 → to_date = YYYY-MM-DD
+
+Date extraction rules:
+- Use the authoritative date and timezone supplied in the system context; never rely on model memory for today's date.
+- Resolve any natural-language relative date or time to exact calendar dates or timestamps from that context; the examples in the context are not a limit. Handle arbitrary quantities such as "3 days ago", "6 weeks from now", "2 months ago", relative weekdays, and date ranges.
+- Use calendar arithmetic for months and years rather than treating them as a fixed number of days. If a phrase has multiple plausible interpretations that affect the transaction, ask a concise clarification.
+- Send dates to tools as YYYY-MM-DD. If no date is provided for a new expense, use the current date from the context.
+- Preserve explicit dates, including past and future dates. Ask when a numeric date is ambiguous instead of guessing.
 
 ---
 
