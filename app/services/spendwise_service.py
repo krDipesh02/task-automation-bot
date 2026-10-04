@@ -55,6 +55,15 @@ def submit_telegram_invite_claim(telegram_user_id: str, invite_token: str,
     return payload
 
 
+def create_telegram_credential_setup_link(telegram_user_id: str) -> str:
+    response = requests.post(
+        f"{SPENDWISE_BASE_URL}/internal/telegram/users/{telegram_user_id}/credential-setup",
+        headers=_backend_headers(), timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()["setupUrl"]
+
+
 def fetch_conversation_memory(context: TelegramRequestContext) -> List[ConversationTurn]:
     if not SPENDWISE_BASE_URL:
         raise RuntimeError("SPENDWISE_BASE_URL is not configured")
