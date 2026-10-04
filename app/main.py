@@ -18,6 +18,7 @@ from app.services.spendwise_service import (
     submit_telegram_invite_claim,
     lookup_telegram_authorization,
     clear_conversation_memory,
+    create_telegram_credential_setup_link,
 )
 from app.utils.logger import configure_logging, get_logger
 
@@ -81,7 +82,7 @@ async def telegram_webhook(request: Request):
         if command_name == "/start":
             invite_token = command[1].strip() if len(command) > 1 else ""
             if not invite_token:
-                response = "You are not authorized to use this bot. Please contact the administrator."
+                response = "You don’t have access to this bot yet. Please contact the administrator for an invite and send /start <token> to activate your account."
             else:
                 try:
                     claim = submit_telegram_invite_claim(
@@ -99,6 +100,22 @@ async def telegram_webhook(request: Request):
                 except Exception:
                     logger.exception("Telegram activation service unavailable")
                     response = "I couldn't verify this invitation right now. Please try again shortly."
+            send_message(chat_id, response)
+            return {"status": "ok"}
+
+        if command_name == "/setup":
+            try:
+                setup_url = create_telegram_credential_setup_link(parsed.telegram_user_id)
+                response = f"Set your SpendWise web username and password using this one-time link (expires in 30 minutes):\n{setup_url}"
+            except Exception as exc:
+                status_code = getattr(getattr(exc, "response", None), "status_code", None)
+                if status_code == 403:
+                    response = "Your Telegram account is not active yet. Please wait for administrator approval."
+                elif status_code == 409:
+                    response = "Web login credentials are already configured, or the setup link cannot be issued."
+                else:
+                    logger.exception("Telegram web credential setup failed")
+                    response = "I couldn't create a setup link right now. Please try again shortly."
             send_message(chat_id, response)
             return {"status": "ok"}
 

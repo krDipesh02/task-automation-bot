@@ -83,6 +83,20 @@ async def test_start_claim_waits_for_admin_approval(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_setup_command_sends_one_time_link_without_agent(monkeypatch):
+    monkeypatch.setattr(main, "TELEGRAM_WEBHOOK_SECRET", "hook-secret")
+    with patch.object(main, "create_telegram_credential_setup_link", return_value="https://spendwise.test/setup-password?token=one-time") as setup, \
+         patch.object(main, "lookup_telegram_authorization") as lookup, \
+         patch.object(main, "run_orchestrator", new_callable=AsyncMock) as orchestrator, \
+         patch.object(main, "send_message") as send:
+        await main.telegram_webhook(request_for("/setup"))
+    setup.assert_called_once_with("12345")
+    lookup.assert_not_called()
+    orchestrator.assert_not_awaited()
+    assert "one-time" in send.call_args.args[1]
+
+
+@pytest.mark.asyncio
 async def test_invalid_invite_returns_safe_message_without_orchestrator(monkeypatch):
     monkeypatch.setattr(main, "TELEGRAM_WEBHOOK_SECRET", "hook-secret")
     with patch.object(main, "submit_telegram_invite_claim", return_value={"success": False}), \
